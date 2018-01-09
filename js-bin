@@ -1,0 +1,154 @@
+#!/bin/sh
+
+primary_usage="$( basename $0 ) [-n name] [-s suffix] [-p] [-f] <file>"
+usage="
+$( basename $0 ) [-h]
+${primary_usage}
+
+where:
+  -h        show this help text
+  -n        override name, default: [git-auto-detect]
+  -s        suffix name
+  -p        preserve file name
+  -f        force push
+  -v        verbose output
+  <file>    file to throw into js-bin
+
+note:
+  place .config file in js-bin's directory, which contains PUBLISH_AT variable
+  indicating published url prefix.
+
+.config example:
+PUBLISH_AT=https://wacky6.github.io/js-bin
+"
+
+NAME=''
+SUFFIX=''
+PRESERVE=''
+PUSH_OPTS=''
+GIT_OUTPUT='/dev/null'
+while getopts ':hn:s:pf' option; do
+  case "$option" in
+    h) echo "$usage" >&2
+       exit
+       ;;
+    s) SUFFIX=$OPTARG
+       ;;
+    n) NAME=$OPTARG
+       ;;
+    p) PRESERVE='*'
+       ;;
+    f) PUSH_OPTS='--force'
+       ;;
+    v) GIT_OUTPUT='&1'
+       ;;
+   \?) printf "unknow option -%s\n " "$OPTARG" >&2
+       echo "usage: $primary_usage" >&2
+       exit 1
+       ;;
+  esac
+done
+
+shift $(( OPTIND - 1 ))
+
+if [[ -z "$1" ]]; then
+  echo "missing file" >&2
+  echo "usage: $primary_usage" >&2
+  exit 1
+fi
+
+# check file readable
+if [[ ! -f "$1" ]]; then
+  echo "can not read file: $1"
+  exit 2
+fi
+
+JS_BIN=$( dirname "$0" )
+JS_BIN_GIT="git --git-dir ${JS_BIN}/.git --work-tree ${JS_BIN}"
+JS_BIN_REMOTE=$( $JS_BIN_GIT remote get-url origin )
+JS_BIN_CONFIG=${JS_BIN}/.config
+GIT_REPO=$( git rev-parse --show-toplevel )
+REPO_DIR_NAME=$( basename "$GIT_REPO" )
+BRANCH=$( git rev-parse --abbrev-ref HEAD )
+COMMIT=$( git rev-parse --short HEAD )
+
+FILE=$1
+BASENAME=$( basename $FILE )
+EXT=${BASENAME##*.}
+FILENAME=${BASENAME%.*}
+HASH=$( cat $FILE | openssl dgst -hex -sha256 )
+
+# build filename
+[[ -z $NAME ]] && NAME=${BRANCH}
+[[ -n $SUFFIX ]] && SUFFIX=-${SUFFIX}
+[[ -n $PRESERVE ]] && PRESERVE=-${FILENAME}
+FULLNAME=${NAME}${SUFFIX}${PRESERVE}-${HASH:0:8}.${EXT}
+
+pinfo () {
+  echo "\033[0;32mINFO:\033[0m $1"
+}
+
+pwarn() {
+  echo "\033[0;33mWARN:\033[0m $1"
+}
+
+perror() {
+  echo "\033[0;31mERROR:\033[0m $1"
+}
+
+[[ -f $JS_BIN_CONFIG ]] && source $JS_BIN_CONFIG || pwarn "config not found"
+
+# colorise helper
+CCl='\033[0m'
+CGr='\033[1;32m'
+CBl='\033[1;34m'
+pinfo "throwing ${CGr}${FILE}${CCl} to ${CBl}${JS_BIN_REMOTE}${CCl}"
+
+# cp into js-bin
+JS_BIN_TARGET_DIR=${JS_BIN}/${REPO_DIR_NAME}
+mkdir -p ${JS_BIN_TARGET_DIR}
+cp -rp ${FILE} ${JS_BIN_TARGET_DIR}/${FULLNAME}
+
+FULL_PATH="$( pwd )/${FILE}"
+REPO_PATH=${FULL_PATH:${#GIT_REPO}}
+
+COMMIT_MSG=$( mktemp )
+cat >$COMMIT_MSG <<_EOF_
+${REPO_DIR_NAME}: ${NAME}${SUFFIX} [${COMMIT}]
+
+repository: ${REPO_DIR_NAME}
+branch: ${BRANCH}
+file: ${REPO_PATH}
+hash: ${HASH}
+_EOF_
+
+$JS_BIN_GIT add ${REPO_DIR_NAME}/${FULLNAME} >$GIT_OUTPUT 2>&1
+$JS_BIN_GIT commit \
+    --file $COMMIT_MSG \
+    --author "js-bin.script <$( git config user.email )>" \
+    >$GIT_OUTPUT 2>&1
+
+pinfo "pushing to ${Cbl}${JS_BIN_REMOTE}${CCl}"
+$JS_BIN_GIT push $PUSH_OPTS origin master >$GIT_OUTPUT 2>&1
+
+PUSH_STATUS=$?
+if [[ $PUSH_STATUS -ne 0 ]]; then
+  perror "error during push"
+  exit $PUSH_STATUS
+fi
+
+if [[ -z $PUBLISH_AT ]]; then
+  pwarn "PUBLISH_AT not set in config"
+else
+  RESULT_URL=${PUBLISH_AT}/${REPO_DIR_NAME}/${FULLNAME}
+
+  # macOS clipboard integration
+  TO_CLIPBOARD=$( which pbcopy )
+  if [[ -n $TO_CLIPBOARD ]]; then
+    echo -n ${RESULT_URL} | $TO_CLIPBOARD
+    pinfo "result url copied to clipboard"
+  fi
+
+  pinfo "published at: ${CGr}${RESULT_URL}${CCl}"
+fi
+
