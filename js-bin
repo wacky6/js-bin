@@ -122,10 +122,12 @@ file: ${REPO_PATH}
 hash: ${HASH}
 _EOF_
 
+AUTHOR=${GIT_AUTHOR:-"js-bin.script <$( git config user.email )>"}
+
 $JS_BIN_GIT add ${REPO_DIR_NAME}/${FULLNAME} >$GIT_OUTPUT 2>&1
 $JS_BIN_GIT commit \
     --file $COMMIT_MSG \
-    --author "js-bin.script <$( git config user.email )>" \
+    --author "${AUTHOR}" \
     >$GIT_OUTPUT 2>&1
 
 pinfo "pushing to ${Cbl}${JS_BIN_REMOTE}${CCl}"
