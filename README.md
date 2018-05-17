@@ -2,6 +2,8 @@ Nothing here
 ===
 Yet another creative usage of github pages?
 
+### Updates
+Check this out: https://www.netlify.com/ , which claims to offer modern automated web developing experience, already used by element-ui.
 
 ### Motivation
 
