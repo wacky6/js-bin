@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 primary_usage="$( basename $0 ) [-n name] [-s suffix] [-p] [-f] <file>"
 usage="
@@ -27,7 +27,7 @@ SUFFIX=''
 PRESERVE=''
 PUSH_OPTS=''
 GIT_OUTPUT='/dev/null'
-while getopts ':hn:s:pf' option; do
+while getopts ':hn:s:pfv' option; do
   case "$option" in
     h) echo "$usage" >&2
        exit
@@ -40,7 +40,7 @@ while getopts ':hn:s:pf' option; do
        ;;
     f) PUSH_OPTS='--force'
        ;;
-    v) GIT_OUTPUT='&1'
+    v) GIT_OUTPUT='/dev/stdout'
        ;;
    \?) printf "unknow option -%s\n " "$OPTARG" >&2
        echo "usage: $primary_usage" >&2
@@ -85,15 +85,15 @@ HASH=$( cat $FILE | openssl dgst -hex -sha256 )
 FULLNAME=${NAME}${SUFFIX}${PRESERVE}-${HASH:0:8}.${EXT}
 
 pinfo () {
-  echo "\033[0;32mINFO:\033[0m $1"
+  echo -e "\033[0;32mINFO:\033[0m $1"
 }
 
 pwarn() {
-  echo "\033[0;33mWARN:\033[0m $1"
+  echo -e "\033[0;33mWARN:\033[0m $1"
 }
 
 perror() {
-  echo "\033[0;31mERROR:\033[0m $1"
+  echo -e "\033[0;31mERROR:\033[0m $1"
 }
 
 [[ -f $JS_BIN_CONFIG ]] && source $JS_BIN_CONFIG || pwarn "config not found"
